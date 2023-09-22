@@ -1,0 +1,9 @@
+name: PR Checks(title, yaml linter)
+on:  # yamllint disable-line rule:truthy
+    pull_request:
+        types: [opened, edited, synchronize, reopened]
+jobs:
+    pr-title-check:
+        uses: adgear/and-action/.github/workflows/check-pr.yml@main
+    yaml-check:
+        uses: adgear/and-action/.github/workflows/check-yml.yml@main

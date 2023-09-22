@@ -1,0 +1,148 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "service.fullname" . }}-alerting-rules
+  labels:
+    app: kube-prometheus-stack
+    release: prometheus-operator
+spec:
+  groups:
+    - name: {{ include "service.fullname" . }}-k8s-objects
+      rules:
+        - alert: {{ include "service.fullname" . }}-warning-high-latency
+          expr: 'sum by (namespace,env) (rate(http_server_request_duration_seconds_sum{namespace=~"{{ .Release.Namespace }}",cluster=~"{{ .Values.labels.datacenter }}"}[5m])) / sum by (namespace,env) (rate(http_server_request_duration_seconds_count{namespace=~"{{ .Release.Namespace }}",cluster=~"{{ .Values.labels.datacenter }}"}[5m])) > 0.200'
+          labels:
+            target: 'Web App : {{`{{ $labels.namespace }}`}}'
+            team: Neo
+            namespace: '{{`{{ $labels.namespace }}`}}'
+            severity: warning
+            service: web
+          annotations:
+            info: High request latency for the last 20 minutes.
+            link: https://grafana.int.adgear.com/d/jaOKRTy4z/neo-rtb-bidder-services-golden-signals?orgId=1 
+          for: 20m
+        - alert: {{ include "service.fullname" . }}-critical-high-latency
+          expr: 'sum by (namespace,env) (rate(http_server_request_duration_seconds_sum{namespace=~"{{ .Release.Namespace }}",cluster=~"{{ .Values.labels.datacenter }}"}[5m])) / sum by (namespace,env) (rate(http_server_request_duration_seconds_count{namespace=~"{{ .Release.Namespace }}",cluster=~"{{ .Values.labels.datacenter }}"}[5m])) > 0.200'
+          labels:
+            target: 'Web App : {{`{{ $labels.namespace }}`}}'
+            team: Neo
+            namespace: '{{`{{ $labels.namespace }}`}}'
+            severity: critical
+            service: web
+          annotations:
+            info: High request latency for the last 1 hour.
+            link: https://grafana.int.adgear.com/d/jaOKRTy4z/neo-rtb-bidder-services-golden-signals?orgId=1 
+          for: 60m
+        - alert: {{ include "service.fullname" . }}-warning-error-rate
+          expr: 'sum by (namespace,env) (rate(http_server_requests_total{code =~ "5..",cluster=~"{{ .Values.labels.datacenter }}",namespace=~"{{ .Release.Namespace }}"}[5m])) / sum by (namespace,env) (rate(http_server_requests_total{cluster=~"{{ .Values.labels.datacenter }}",namespace=~"{{ .Release.Namespace }}"}[5m])) * 100 > 0.5'
+          labels:
+            target: 'Web App : {{`{{ $labels.namespace }}`}}'
+            team: Neo
+            namespace: '{{`{{ $labels.namespace }}`}}'
+            severity: warning
+            service: web
+          annotations:
+            info: High error rate for the last 20 minutes.
+            link: https://grafana.int.adgear.com/d/jaOKRTy4z/neo-rtb-bidder-services-golden-signals?orgId=1 
+          for: 20m
+        - alert: {{ include "service.fullname" . }}-critical-error-rate
+          expr: 'sum by (namespace,env) (rate(http_server_requests_total{code =~ "5..",cluster=~"{{ .Values.labels.datacenter }}",namespace=~"{{ .Release.Namespace }}"}[5m])) / sum by (namespace,env) (rate(http_server_requests_total{cluster=~"{{ .Values.labels.datacenter }}",namespace=~"{{ .Release.Namespace }}"}[5m])) * 100 > 1'
+          labels:
+            target: 'Web App : {{`{{ $labels.namespace }}`}}'
+            team: Neo
+            namespace: '{{`{{ $labels.namespace }}`}}'
+            severity: critical
+            service: web
+          annotations:
+            info: Very high error rate for the last 5 minutes.
+            link: https://grafana.int.adgear.com/d/jaOKRTy4z/neo-rtb-bidder-services-golden-signals?orgId=1 
+          for: 5m
+        - alert: {{ include "service.fullname" . }}-50%-PodsNotReady
+          expr: 'kube_statefulset_status_replicas_available{namespace =~"{{ .Release.Namespace }}"} / kube_statefulset_status_replicas{namespace =~ "{{ .Release.Namespace }}"} < 0.5'
+          labels:
+            target: '{{`{{ $labels.statefulset}}`}}'
+            team: Neo
+            datacenter: {{ .Values.labels.datacenter }}
+            namespace: {{ .Release.Namespace }}
+            severity: critical
+          annotations:
+            info: Statefulset {{`{{ $labels.statefulset}}`}} has less than 50% pods running.
+          for: 10m
+        - alert: {{ include "service.fullname" . }}-SinglePodOnly
+          expr: 'kube_statefulset_status_replicas{statefulset=~"{{ include "service.fullname" . }}",namespace=~"{{ .Release.Namespace }}"}  == 1'
+          labels:
+            target: '{{`{{ $labels.statefulset }}`}}'
+            team: Neo
+            datacenter: {{ .Values.labels.datacenter }}
+            namespace: {{ .Release.Namespace }}
+            severity: critical
+          annotations:
+            info: Statefulset {{`{{ $labels.statefulset }}`}} in {{ .Release.Namespace }} has a single replica only.
+        - alert: {{ include "service.fullname" . }}-job failed
+          expr: 'kube_job_failed{namespace =~ "{{ .Release.Namespace }}"} > 0'
+          labels:
+            target: '{{`{{ $labels.job_name }}`}}'
+            team: Neo
+            datacenter: {{ .Values.labels.datacenter }}
+            namespace: {{ .Release.Namespace }}
+            severity: critical
+          annotations:
+            info: CronJob {{`{{ $labels.job_name }}`}} failed to complete in "{{ .Release.Namespace }}".
+
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAlertmanagerConfig
+metadata:
+  name: {{ include "service.fullname" . }}-alerting
+  labels:
+    alertmanagerConfig: {{ include "service.fullname" . }}
+spec:
+  route:
+    group_by: ['alertname']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 5m
+    receiver: void
+    routes:
+      - receiver: void
+        matchers:
+          - "alertname =~ Tenant.*"
+      - receiver: slack
+        matchers:
+          - "team = Neo"
+          - "datacenter = {{ .Values.labels.datacenter }}"
+          - "namespace = {{ .Release.Namespace }}"
+          - "severity = critical"
+        continue: true
+      - receiver: PagerDuty
+        matchers:
+          - "team = Neo"
+          - "severity = critical"
+          - "datacenter = {{ .Values.labels.datacenter }}"
+          - "namespace = {{ .Release.Namespace }}"
+  receivers:
+  - name: slack
+    slack_configs:
+      - send_resolved: true
+        api_url:
+          name: {{ include "service.fullname" . }}-secret
+          key: slack_webhookURL
+        color: '{{`{{ if eq .Status "firing" }}`}}danger{{`{{ else }}`}}good{{`{{ end }}`}}'
+        title: '{{`{{ template "slack.adgear.title" . }}`}}'
+        text: '{{`{{ template "slack.adgear.text" . }}`}}'
+  - name: PagerDuty
+    pagerduty_configs:
+      - send_resolved: true
+        routing_key:
+          name: {{ include "service.fullname" . }}-secret
+          key: pagerduty_serviceKey
+        description: '{{`{{ template "pagerduty.adgear.title" . }}`}}'
+        details:
+          firing: '{{`{{ template "pagerduty.adgear.text" . }}`}}'
+          num_firing: '{{`{{ .Alerts.Firing | len }}`}}'
+          num_resolved: '{{`{{ .Alerts.Resolved | len }}`}}'
+          resolved: '{{`{{ template "pagerduty.default.instances" .Alerts.Resolved }}`}}'
+        severity: critical
+  - name: void
+{{- end }}

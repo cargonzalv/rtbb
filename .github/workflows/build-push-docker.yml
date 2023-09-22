@@ -1,0 +1,113 @@
+name: build-push-docker
+
+env:
+  ACTIONS_RUNNER_DEBUG: true
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Docker image tag"
+        type: string
+        required: true
+      build_date_label:
+        description: "Build date docker image label"
+        type: string
+        required: true
+      git_branch_label:
+        description: "Git branch label"
+        type: string
+        required: true
+      git_tag_label:
+        description: "Git tag label"
+        type: string
+        required: true
+      git_hash_label:
+        description: "Git hash label"
+        type: string
+        required: true
+      service_name:
+        description: "Service name label"
+        type: string
+        required: true
+      pr_number:
+        type: string
+        required: false
+
+    outputs:
+      docker_tag:
+        description: "Published image tag"
+        value: ${{ jobs.build-and-push-docker.outputs.docker_tag }}
+
+jobs:
+  build-and-push-docker:
+    name: Build Docker image
+    runs-on: [self-hosted, ubuntu-22.04-medium]
+    permissions:
+      id-token: write   # permissions required by hashicorp/vault-action (request JWT token)
+      contents: read    # required for actions/checkout
+    steps:
+      - name: Login to Artifactory
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.ARTIFACTORY_HOSTNAME  }}
+          username: ${{ secrets.ARTIFACTORY_GITHUB_ACTIONS_USERNAME }}
+          password: ${{ secrets.ARTIFACTORY_GITHUB_ACTIONS_PASSWORD }}
+
+      - name: Get token
+        id: get_token
+        uses: machine-learning-apps/actions-app-token@0.21
+        with:
+          APP_ID: ${{ secrets.PRIVATE_REPO_APP_ID }}
+          APP_PEM: ${{ secrets.PRIVATE_REPO_APP_PEM }}
+
+      - name: Setup private repo access
+        run: git config --global url."https://oauth2:${TOKEN}@github.com".insteadOf https://github.com
+        env:
+          TOKEN: ${{ steps.get_token.outputs.app_token }}
+
+      - name: check out repository code
+        uses: actions/checkout@v3
+
+      - name: set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: cache docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.20.x'
+
+      - name: Build binary
+        run: make BRANCH=${{ inputs.git_tag_label }} GIT_TAG=${{ inputs.git_hash_label }} BUILD_VERSION=${{ inputs.git_hash_label }} build-linux.amd64
+
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: adgear-docker.jfrog.io/adgear/${{ inputs.service_name }}:${{ inputs.image_tag }}
+          build-args: |
+            BUILD_DATE=${{ inputs.build_date_label }}
+            GIT_BRANCH=${{ inputs.git_branch_label }}
+            GIT_TAG=${{ inputs.git_hash_label }}
+            GIT_HASH=${{ inputs.git_hash_label }}
+            SERVICE_NAME=${{ inputs.service_name }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+    outputs:
+      docker_tag: ${{ inputs.image_tag }}

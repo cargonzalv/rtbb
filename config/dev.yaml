@@ -1,0 +1,32 @@
+app:
+   name: "rtb-bidder"
+   version: "0.0.1"
+   environment: "dev"
+
+logger:
+  level: "Debug"
+  format: "json"
+
+metrics:
+  namespace: "neo"
+  subsystem: "rtb_bidder"
+
+healthcheck:
+  loopintervalseconds: 10
+
+http:
+  name: "bidder-rest-server"
+  port: 8085
+  notfoundsamplingrate: 1 
+  readtimeoutseconds: 5
+  writetimeoutseconds: 10
+  maxconnsperip: 500
+  maxreqperconn: 500
+  idletimeoutseconds: 5
+
+# Sample local_data_store configuration
+lds:
+   refresh_interval: "5m"
+   metadatas:
+      - advertisers:
+           download_uri: "s3://prod-data-activation/data-activation/advertisers/parquet/advertisers.parquet"

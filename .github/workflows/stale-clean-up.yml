@@ -1,0 +1,9 @@
+name: state clean up
+
+on:
+    schedule:
+        - cron: '0 0 * * *'
+
+jobs:
+    stalecleanup:
+        uses: adgear/and-action/.github/workflows/stale-clean-up.yml@main

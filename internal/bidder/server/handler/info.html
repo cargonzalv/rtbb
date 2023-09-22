@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <title>Build information</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+          .container {
+              position: relative;
+              text-align: left;
+              color: black;
+          }
+
+          .bottom-left {
+              position: absolute;
+              bottom: 8px;
+              left: 16px;
+          }
+
+          .top-left {
+              position: absolute;
+              top: 8px;
+              left: 16px;
+          }
+
+          .top-right {
+              position: absolute;
+              top: 8px;
+              right: 16px;
+          }
+
+          .bottom-right {
+              position: absolute;
+              bottom: 8px;
+              right: 16px;
+          }
+
+          .centered {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+          }
+      </style>
+  </head>
+  <body>
+    <h2>{{.Name}}</h2>
+    <div class="container">
+        <img src="{{.BackgroundImageUrl}}" alt="Snow" style="width:100%;opacity:0.7">
+        <div class="top-left">
+            <div><b>Build info</b></div>
+            <div>Go version: <b>{{.GoVersion}}</b></div>
+            <div>Build time: <b>{{.BuildTime}}</b></div>
+            <div>Build on OS: <b>{{.BuildOnOs}}</b></div>
+            <div>Build number: <b>{{.BuildNumber}}</b></div>
+            <div>Git commit: <b>{{.GitCommit}}</b></div>
+            <div>Git Tag:    <b>{{.GitTag}}</b></div>
+            <div>Docker Tag: <b>{{.DockerTag}}</b></div>
+        </div>
+    </div>
+  </body>
+</html>

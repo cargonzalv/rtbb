@@ -1,0 +1,41 @@
+name: staging delivery
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
+      - "**.md"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  pr-metadata:
+    uses: ./.github/workflows/pr-metadata.yml
+
+  build-push-docker:
+    uses: ./.github/workflows/build-push-docker.yml
+    secrets: inherit
+    needs: pr-metadata
+    with:
+      image_tag: ${{ needs.pr-metadata.outputs.sha_short }}
+      build_date_label: ${{ needs.pr-metadata.outputs.build_date }}
+      git_branch_label: ${{ needs.pr-metadata.outputs.branch }}
+      git_tag_label: ${{ needs.pr-metadata.outputs.tag }}
+      git_hash_label: ${{ needs.pr-metadata.outputs.sha_short }}
+      service_name: "rtb-bidder"
+      pr_number: ${{ needs.pr-metadata.outputs.pr_number }}
+
+  helm-deploy:
+    uses: ./.github/workflows/helm-deploy.yml
+    secrets: inherit
+    needs: build-push-docker
+    with:
+      rancher-cluster-id: "c-qfkfg"
+      rancher-project-name: "greenfield"
+      namespace: "rtb-bidder"
+      chart-release-name: "rtb-bidder"
+      value-file: "dev.yaml"
+      image-tag: ${{ needs.build-push-docker.outputs.docker_tag }}

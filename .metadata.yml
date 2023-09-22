@@ -1,0 +1,23 @@
+metadata:
+  name: rtb-bidder
+  description: "Next generation RTB Bidder service which serves O&O (TV Native) trafic"
+  labels:
+    stack: "golang"
+    practice: "engineering"
+    jira-project: "INNOVX"
+    jira-board: 1704
+    public: true
+    sensitive: false
+  links:
+    - url: https://github.com/adgear/rtb-bidder/...
+  monitoring:
+    golden-signals:
+      Title: "RTB Bidder Golden Signals"
+      URL: >
+        https://grafana.int.adgear.com/d/0JYSf334k/rtb-bidder-golden-signals?orgId=1&refresh=10s&var-datasource=
+        use1-rdev&var-cluster=use1-rdev&var-namespace=rtb-config-dev&var-pod=rtb-config-5cdbf6c7bc-gxkg7
+
+spec:
+  owner: cg-dsp-bidding-systems
+  type: service
+  lifecycle: development

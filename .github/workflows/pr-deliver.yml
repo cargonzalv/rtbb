@@ -1,0 +1,53 @@
+name: pr delivery
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
+      - "**.md"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  ACTIONS_RUNNER_DEBUG: true
+
+jobs:
+  pr-metadata:
+    uses: ./.github/workflows/pr-metadata.yml
+
+  build-push-docker:
+    uses: ./.github/workflows/build-push-docker.yml
+    secrets: inherit
+    needs: pr-metadata
+    with:
+      image_tag: ${{ needs.pr-metadata.outputs.sha_short }}
+      build_date_label: ${{ needs.pr-metadata.outputs.build_date }}
+      git_branch_label: ${{ needs.pr-metadata.outputs.branch }}
+      git_tag_label: ${{ needs.pr-metadata.outputs.tag }}
+      git_hash_label: ${{ needs.pr-metadata.outputs.sha_short }}
+      service_name: ${{ vars.SERVICE_NAME }}
+      pr_number: ${{ needs.pr-metadata.outputs.pr_number }}
+
+  create-namespace:
+    uses: ./.github/workflows/pr-namespace-create.yml
+    secrets: inherit
+    needs: [build-push-docker, pr-metadata]
+    with:
+      rancher-cluster-id: ${{ vars.DEV_RANCHER_CLUSTER_ID }}
+      rancher-project-name: ${{ vars.DEV_RANCHER_PROJECT_NAME }}
+      namespace: "rtb-bidder-pr-${{  needs.pr-metadata.outputs.pr_number }}"
+
+  helm-deploy:
+    uses: ./.github/workflows/helm-deploy.yml
+    secrets: inherit
+    needs: [build-push-docker, pr-metadata, create-namespace]
+    with:
+      rancher-cluster-id: ${{  vars.DEV_RANCHER_CLUSTER_ID }}
+      rancher-project-name: ${{ vars.DEV_RANCHER_PROJECT_NAME }}
+      namespace: "rtb-bidder-pr-${{  needs.pr-metadata.outputs.pr_number }}"
+      chart-release-name: "rtb-bidder-pr-${{  needs.pr-metadata.outputs.pr_number }}"
+      value-file: "pr.yaml"
+      image-tag: ${{ needs.build-push-docker.outputs.docker_tag }}

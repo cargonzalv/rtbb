@@ -1,0 +1,141 @@
+labels:
+  BillingOwner: Neo
+  BillingProject: "rtb-bidder"
+  Operation: SRE
+  team: backend
+
+namespace: "rtb-bidder"
+
+logging:
+  enabled: false
+  clusterOutput:
+    - "Loki greenfield"
+
+replicaCount: 2
+
+image:
+  repository: "adgear-docker.jfrog.io/adgear/rtb-bidder"
+  pullPolicy: IfNotPresent
+
+kafkafetcherimage:
+  repository: adgear-docker.jfrog.io/adgear/go-commons-kafka-fetcher
+  pullPolicy: IfNotPresent
+
+webimage:
+  repository: adgear-docker.jfrog.io/adgear/nginx
+  tag: 1.18.0-1
+  pullPolicy: IfNotPresent
+
+ingress:
+  enabled: false
+  annotations:
+    alb.ingress.kubernetes.io/target-node-labels: "node-role.kubernetes.io/worker=true"
+    alb.ingress.kubernetes.io/group.name: sanpublic1
+    alb.ingress.kubernetes.io/healthcheck-path: /health/liveness
+    certmanager.k8s.io/cluster-issuer: vault-issuer
+    cert-manager.io/cluster-issuer: vault-issuer
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8085"
+  prometheus.io/path: "/metrics"
+  sumologic.com/include: "true"
+
+service:
+  annotations:
+    prometheus.io/probe: "true"
+    prometheus.io/probe_path: status
+    prometheus.io/probe_port: "80"
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  nodePort:
+
+livenessProbe:
+  httpGet:
+    path: /health/liveness
+    port: 8085
+    httpHeaders:
+      - name: Content-Type
+        value: application/json
+  initialDelaySeconds: 30
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet:
+    path: /health/readiness
+    port: 8085
+    httpHeaders:
+      - name: Content-Type
+        value: application/json
+  initialDelaySeconds: 30
+  periodSeconds: 15
+
+resources:
+  limits:
+    memory: 12G
+    ephemeral-storage: "8Gi"
+  requests:
+    memory: 10G
+    cpu: 1
+    ephemeral-storage: "8Gi"
+
+fetcherresources:
+  limits:
+    memory: 8G
+  requests:
+    memory: 6G
+    cpu: 1
+
+webresources:
+  limits:
+    memory: 8G
+  requests:
+    memory: 6G
+    cpu: 1
+
+cronresources:
+  limits:
+    memory: 8G
+  requests:
+    memory: 4G
+    cpu: 1
+
+
+nodeSelector: {}
+
+serviceMonitor:
+  enabled: true
+  targets:
+    - path: /metrics
+      port: 8085
+      interval: 10s
+      scrapeTimeout: 10s
+    - path: /metrics
+      port: 8087
+      interval: 10s
+      scrapeTimeout: 10s
+
+kafka_pvc:
+  enabled: true
+  size: "50Gi"
+  access_mode: ReadWriteOnce
+  storage_class: gp3-wait-delete-default
+
+securityContext:
+  fsGroup: 1001
+
+kafka_monitoring:
+  enabled: false
+  exclude:
+    topics:
+
+vault:
+  slack_webhookURL: "$(secret/cg-dsp-bidding-systems/shared/slack/webhook-url value)"
+  pagerduty_serviceKey: "$(secret/cg-dsp-bidding-systems/shared/pagerduty/service-key value)"
+
+monitoring:
+  enabled: true
+
+autoscaling:
+  enabled: false

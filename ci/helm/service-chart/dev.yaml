@@ -1,0 +1,73 @@
+labels:
+  Environment: dev
+  cluster: use1-rdev
+  datacenter: use1-rdev.k8s.adgear.com
+  alerting: nopage
+
+replicaCount: 2
+
+podAnnotations:
+  iam.amazonaws.com/role: arn:aws:iam::652057145661:role/rtb-bidder-dev
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30218
+  targetPort: 8080
+  appPort: 8085
+  kafkaPort: 8087
+
+image:
+  tag: "0.0.2"
+
+kafkafetcherimage:
+  repository: adgear-docker.jfrog.io/adgear/go-commons-kafka-fetcher
+  tag: v0.0.5
+
+ingress:
+  enabled: true
+  class: alb
+  annotations:
+    alb.ingress.kubernetes.io/target-node-labels: "node-role.kubernetes.io/worker=true"
+    alb.ingress.kubernetes.io/group.name: sanpublic1
+    alb.ingress.kubernetes.io/healthcheck-path: /health/liveness
+    adgear.com/Environment: dev
+  hosts:
+    - host: "rtb-bidder-dev.adgear.com"
+      paths: ["/"]
+  tls:
+    - hosts:
+        - "rtb-bidder.use1-rdev.k8s.adgear.com"
+        - "rtb-bidder-dev.adgear.com"
+      secretName: "rtb-bidder-dev-tls"
+
+environment_vars:
+  ENVIRONMENT: "dev"
+
+monitoring:
+  enabled: true
+
+vmprobe:
+  enabled: true
+  api_url: "https://rtb-bidder-dev.adgear.com/health/readiness"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+logging:
+  enabled: true

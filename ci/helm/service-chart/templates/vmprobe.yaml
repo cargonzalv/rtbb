@@ -1,0 +1,18 @@
+{{- if .Values.vmprobe.enabled }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMProbe
+metadata:
+  name: {{ include "service.fullname" . }}-vmprobe
+spec:
+  jobName: static-probe
+  vmProberSpec:
+    url: prometheus-blackbox-exporter.ep-exporters:9115
+  module: http_2xx_no_verify_tls
+  targets:
+    staticConfig:
+      labels:
+        namespace: {{ .Release.Namespace }}
+      targets:
+        -  {{ .Values.vmprobe.api_url }}
+  interval: 10s
+{{- end }}

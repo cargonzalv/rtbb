@@ -1,0 +1,90 @@
+name: helm deploy
+
+env:
+  ACTIONS_RUNNER_DEBUG: true
+
+on:
+  workflow_call:
+    inputs:
+      rancher-cluster-id:
+        description: "Rancher cluster id"
+        type: string
+        required: true
+      rancher-project-name:
+        description: "Rancher project name"
+        type: string
+        required: true
+      namespace:
+        description: "Kubernetes namespace"
+        type: string
+        required: true
+      chart-release-name:
+        description: "The chart release name"
+        type: string
+        required: true
+      value-file:
+        description: "The name of k8s value file"
+        type: string
+        required: true
+      image-tag:
+        description: "The deploing docker image tag"
+        type: string
+        required: true
+
+defaults:   # to be used by helm
+  run:
+    shell: bash
+    working-directory: ./ci/helm/service-chart
+
+jobs:
+  helm-base-runner:
+    runs-on: [self-hosted, ubuntu-22.04-small]
+    permissions:   # permissions required by ep-actions/kubernetes-login and vault
+      id-token: write
+      contents: read
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v3
+
+      - name: create kubeconfig
+        uses: adgear/ep-actions/kubernetes-login@kubernetes-login-v1.0.0
+        with:
+          cluster-id: ${{ inputs.rancher-cluster-id }}
+          project-name: ${{ inputs.rancher-project-name }}
+          namespace: ${{ inputs.namespace }}
+
+      - name: replace image tag in the value file
+        run: |
+          sed '/^image:/{n;s/tag:.*/tag: "${{ inputs.image-tag }}"/;}' ${{ inputs.value-file }} >> env.yaml
+
+      - name: debug value file
+        run: |
+          cat env.yaml
+
+      - name: login to vault
+        uses: hashicorp/vault-action@v2.4.3
+        with:
+          method: jwt                               # leave as is
+          path: adgear-github-actions               # leave as is (dedicated vault role for github actions)
+          url: https://vault.int.adgear.com:8200    # leave as is (production vault instance)
+          exportToken: true                         # will export VAULT_TOKEN, required for helm deploy plugin to work
+          secrets: |
+            secret/ep/shared/artifactory/username value | ARTIFACTORY_USERNAME ;
+            secret/ep/shared/artifactory/password value | ARTIFACTORY_PASSWORD ;
+
+      - name: helm diff   # this command shows only differences between current and desired state
+        env:
+          VAULT_ADDR: https://vault.int.adgear.com:8200   # leave as is (production vault instance)
+        run: |
+          helm deploy --name ${{ inputs.chart-release-name }} \
+            -n ${{ inputs.namespace }} --allow-unreleased \
+            -f values.yaml -f env.yaml .
+
+      - name: helm deploy   # deploy chart
+        env:
+          VAULT_ADDR: https://vault.int.adgear.com:8200   # leave as is (production vault instance)
+        run: |   # you may need to specify more parameters in helm command
+          helm deploy --name  ${{ inputs.chart-release-name }} \
+            -n ${{ inputs.namespace }} --wait \
+            -f values.yaml -f env.yaml \
+            --history-max 3 --yes .

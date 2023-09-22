@@ -1,0 +1,80 @@
+labels:
+  Environment: prod
+  cluster: use1-rprod
+  datacenter: use1-rprod.k8s.adgear.com
+  alerting: nopage
+
+replicaCount: 2
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 31101
+  targetPort: 8080
+  appPort: 8085
+  kafkaPort: 8087
+
+image:
+  tag: v0.0.1
+
+kafkafetcherimage:
+  repository: adgear-docker.jfrog.io/adgear/go-commons-kafka-fetcher
+  tag: v0.0.5
+
+cron_image:
+  repository: adgear-docker.jfrog.io/adgear/awscli
+  tag: 0.2.1
+
+ingress:
+  enabled: true
+  class: alb
+  annotations:
+    alb.ingress.kubernetes.io/target-node-labels: "node-role.kubernetes.io/worker=true"
+    alb.ingress.kubernetes.io/group.name: sanpublic1
+    alb.ingress.kubernetes.io/healthcheck-path: /health/liveness
+    adgear.com/Environment: prod
+  hosts:
+    - host: "rtb-bidder.adgear.com"
+      paths: ["/"]
+  tls:
+    - hosts:
+        - "rtb-bidder.use1-rprod.k8s.adgear.com"
+        - "rtb-bidder.adgear.com"
+        - "rtb-bidder.adgear.com"
+      secretName: "rtb-bidder-tls"
+
+environment_vars:
+  ENVIRONMENT: "prod"
+
+monitoring:
+  enabled: true
+
+kafka_monitoring:
+  enabled: true
+
+kafka_topics:
+
+vmprobe:
+  enabled: true
+  api_url: "https://rtb-bidder.adgear.com/health/readiness"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+logging:
+  enabled: true

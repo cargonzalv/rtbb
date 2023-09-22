@@ -1,0 +1,21 @@
+{{- if .Values.logging.enabled }}
+apiVersion: logging.banzaicloud.io/v1beta1
+kind: Flow
+metadata:
+  name: {{ include "service.fullname" . }}-logging-flow
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  filters:
+  - tag_normaliser:
+      format: {{ include "service.fullname" . }}/${namespace_name}.${pod_name}.${container_name}
+  {{- with .Values.logging.clusterOutput }}
+  globalOutputRefs:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+  match:
+    - select:
+        labels:
+         app.kubernetes.io/name: {{ include "service.fullname" . }}
+{{- end }}

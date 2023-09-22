@@ -1,0 +1,14 @@
+{
+    "apiVersion": "v1",
+    "kind": "Namespace",
+    "metadata": {
+        "annotations": {
+            "field.cattle.io/projectId": "c-qfkfg:p-ll9kr"
+        },"labels": {
+            "team": "neo",
+            "field.cattle.io/projectId": "p-ll9kr",
+            "kubernetes.io/metadata.name": "namespace-placeholder"
+        },
+        "name": "namespace-placeholder"
+    }
+}

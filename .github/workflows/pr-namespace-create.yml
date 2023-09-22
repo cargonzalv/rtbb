@@ -1,0 +1,62 @@
+name: pr namesapce create
+
+env:
+  ACTIONS_RUNNER_DEBUG: true
+
+on:
+  workflow_call:
+    inputs:
+      rancher-cluster-id:
+        description: "Rancher cluster id"
+        type: string
+        required: true
+      rancher-project-name:
+        description: "Rancher project name"
+        type: string
+        required: true
+      namespace:
+        description: "Kubernetes namespace"
+        type: string
+        required: true
+
+    outputs:
+      namespace:
+        description: "K8s namesapce"
+        value: ${{ jobs.k8s-create-namespace.outputs.namesapce }}
+
+defaults:   # to be used by helm
+  run:
+    shell: bash
+    working-directory: ./ci/helm/service-chart
+
+jobs:
+  k8s-create-namespace:
+    runs-on: [self-hosted, ubuntu-22.04-small]
+    permissions:   # permissions required by ep-actions/kubernetes-login and vault
+      id-token: write
+      contents: read
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v3
+
+      - name: create kubeconfig
+        uses: adgear/ep-actions/kubernetes-login@kubernetes-login-v1.0.0
+        with:
+          cluster-id: ${{ inputs.rancher-cluster-id }}
+          project-name: ${{ inputs.rancher-project-name }}
+          namespace: ${{ inputs.namespace }}
+
+      - name: replace namespace name in pr namespace file
+        run: |
+          make DYNAMIC_NAMESPACE="${{ inputs.namespace }}" create-ns-info
+
+      - name: debug value file
+        run: |
+          cat namespace.json
+
+      - name: create namespace
+        run: |
+            kubectl create --insecure-skip-tls-verify -f namespace.json || echo "namespace already exists"
+
+    outputs:
+      namesapce: ${{ inputs.namespace }}

@@ -1,0 +1,53 @@
+name: pr-metadata
+
+env:
+  ACTIONS_RUNNER_DEBUG: true
+
+on:
+  workflow_call:
+    outputs:
+      build_date:
+        description: "The flow execution date and time"
+        value: ${{ jobs.read-pr-metadata.outputs.build_date }}
+      sha_short:
+        description: "The short version of commit SHA"
+        value: ${{ jobs.read-pr-metadata.outputs.sha_short }}
+      branch:
+        description: "The branch name"
+        value: ${{ jobs.read-pr-metadata.outputs.branch }}
+      tag:
+        description: "This could be release tag or short sha"
+        value: ${{ jobs.read-pr-metadata.outputs.tag }}
+      pr_number:
+        description: "pr number"
+        value: ${{ jobs.read-pr-metadata.outputs.pr_number }}
+
+jobs:
+  read-pr-metadata:
+    runs-on: [self-hosted, ubuntu-22.04-medium]
+    steps:
+      - name: check out repository code
+        id: checkout
+        uses: actions/checkout@v3
+
+      - id: get-metadata
+        shell: bash
+        run:
+          |
+          echo "build_date=$(date +%FT%T%z)" >> "$GITHUB_OUTPUT"
+          echo "sha_short=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          echo "branch=$(echo ${GITHUB_REF#refs/heads/})" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${{ github.event.number }}" >> "$GITHUB_OUTPUT"
+          if [ "${{github.event_name}}" = "pull_request" ]; then
+              echo "tag=${GITHUB_HEAD_REF##*/}" >> $GITHUB_OUTPUT
+          elif [ "${{github.event_name}}" = "push" ]; then
+              echo "tag=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+          else
+              echo "tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+          fi
+    outputs:
+      build_date: ${{ steps.get-metadata.outputs.build_date }}
+      sha_short: ${{ steps.get-metadata.outputs.sha_short }}
+      branch: ${{ steps.get-metadata.outputs.branch }}
+      tag: ${{ steps.get-metadata.outputs.tag }}
+      pr_number: ${{ steps.get-metadata.outputs.pr_number }}

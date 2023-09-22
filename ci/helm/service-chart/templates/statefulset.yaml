@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "service.fullname" . }}
+  labels:
+    {{- include "service.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "service.fullname" . }}-headless-service
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "service.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 12 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "service.fullname" . }}-configmap
+            - secretRef:
+                name: {{ include "service.fullname" . }}-secret
+          command: ["./srv"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.appPort }}
+              protocol: TCP
+            - name: kafka-metrics
+              containerPort: {{ .Values.service.kafkaPort }}
+              protocol: TCP
+          volumeMounts:
+          - mountPath: /data/kafka
+            name: kafkavol
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+        - name: kafka-fetcher
+          image: "{{ .Values.kafkafetcherimage.repository }}:{{ .Values.kafkafetcherimage.tag }}"
+          imagePullPolicy: {{ .Values.kafkafetcherimage.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "service.fullname" . }}-configmap
+            - secretRef:
+                name: {{ include "service.fullname" . }}-secret
+          command: ["./server"]
+          volumeMounts:
+          - mountPath: /data/kafka
+            name: kafkavol
+          resources:
+            {{- toYaml .Values.fetcherresources | nindent 12 }}
+
+  volumeClaimTemplates:
+  - metadata:
+      name: kafkavol
+    spec:
+      accessModes: [ "{{ .Values.kafka_pvc.access_mode }}" ]
+      storageClassName: "{{ .Values.kafka_pvc.storage_class }}"
+      resources:
+        requests:
+          storage: {{ .Values.kafka_pvc.size }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "service.fullname" . }}-headless-service
+  labels:
+    {{- include "service.selectorLabels" . | nindent 4 }}
+spec:
+  ports:
+  - port: 8080
+    name: http 
+  clusterIP: None
+  selector:
+    {{- include "service.selectorLabels" . | nindent 4 }}
